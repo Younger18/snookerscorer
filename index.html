@@ -1,0 +1,1824 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a2e1a">
+<title>斯诺克计分器</title>
+<style>
+  { 
+    box-sizing: border-box; 
+    margin: 0; 
+    padding: 0; 
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :root {
+    --bg-primary: #0f1a0f;
+    --bg-secondary: #1a2e1a;
+    --bg-card: #243824;
+    --bg-card-active: #2d4a2d;
+    --accent-gold: #f0c040;
+    --accent-green: #4a8a4a;
+    --text-primary: #ffffff;
+    --text-secondary: #a0b0a0;
+    --text-muted: #6a7a6a;
+    --danger: #c53e3e;
+    --danger-hover: #d64a4a;
+    --warning: #b8860b;
+    --free-ball: #ff6b35;
+    --black-ball: #1a1a1a;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    color: var(--text-primary);
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-x: hidden;
+  }
+
+  .header {
+    text-align: center;
+    padding: 8px 0;
+  }
+
+  h1 {
+    font-size: clamp(1.2rem, 4vw, 1.6rem);
+    font-weight: 600;
+    letter-spacing: 4px;
+    background: linear-gradient(135deg, #f0c040 0%, #e0d080 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+    letter-spacing: 1px;
+  }
+
+  #voice-bar {
+    text-align: center;
+  }
+
+  #btn-voice {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 24px;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    padding: 8px 18px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    backdrop-filter: blur(10px);
+  }
+
+  #btn-voice.on  { 
+    background: rgba(74, 138, 74, 0.2); 
+    border-color: var(--accent-green);
+    color: #a8d5a8;
+  }
+  #btn-voice.off { 
+    background: rgba(197, 62, 62, 0.1); 
+    border-color: rgba(197, 62, 62, 0.3);
+    color: #d4a0a0;
+  }
+  #btn-voice:active { transform: scale(0.95); }
+
+  #scoreboard {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .player-card {
+    background: var(--bg-card);
+    border: 2px solid transparent;
+    border-radius: 16px;
+    padding: 16px 12px;
+    text-align: center;
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    overflow: hidden;
+  }
+
+  .player-card.active {
+    background: var(--bg-card-active);
+    border-color: var(--accent-gold);
+    box-shadow: 0 8px 24px rgba(240, 192, 64, 0.15);
+    transform: translateY(-2px);
+  }
+
+  .player-card.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--accent-gold);
+  }
+
+  .player-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    position: relative;
+  }
+
+  .turn-arrow {
+    width: 0;
+    height: 0;
+    transition: all 0.3s ease;
+    filter: drop-shadow(0 2px 4px rgba(240, 192, 64, 0.5));
+    animation: bounce 1.5s infinite;
+  }
+
+  .player-card:first-child .turn-arrow {
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-left: 10px solid var(--accent-gold);
+    order: -1;
+  }
+
+  .player-card:last-child .turn-arrow {
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-right: 10px solid var(--accent-gold);
+    order: 1;
+  }
+
+  .player-card:not(.active) .turn-arrow {
+    border-left-color: #555;
+    border-right-color: #555;
+    animation: none;
+    opacity: 0.5;
+  }
+
+  @keyframes bounce {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(var(--bounce-dir, 3px)); }
+  }
+
+  .player-card:first-child .turn-arrow { --bounce-dir: 3px; }
+  .player-card:last-child .turn-arrow { --bounce-dir: -3px; }
+
+  .player-name input {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid rgba(255,255,255,0.1);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    width: min(100px, 80%);
+    text-align: center;
+    outline: none;
+    font-family: inherit;
+    font-weight: 500;
+    padding: 4px;
+    transition: border-color 0.3s;
+  }
+
+  .player-name input:focus {
+    border-bottom-color: var(--accent-gold);
+  }
+
+  .score {
+    font-size: clamp(2.5rem, 8vw, 3.5rem);
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+    margin: 12px 0;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+  }
+
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-value {
+    font-weight: 600;
+    color: #c8e6a0;
+    font-size: 0.8rem;
+  }
+
+  #status-bar {
+    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .status-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  #phase-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent-gold);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #phase-label::before {
+    content: '●';
+    font-size: 0.5rem;
+    animation: blink 2s infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  #remaining-info {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  #remaining-info span {
+    color: var(--accent-gold);
+    font-weight: 600;
+  }
+
+  .reds-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .reds-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .reds-grid {
+    display: grid;
+    grid-template-columns: repeat(15, 1fr);
+    gap: 6px;
+    width: 100%;
+  }
+
+  .red-ball {
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ff6b6b 0%, #8b0000 100%);
+    box-shadow: 
+      0 3px 6px rgba(0,0,0,0.4),
+      inset 0 -2px 4px rgba(0,0,0,0.2),
+      inset 0 2px 4px rgba(255,255,255,0.3);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+  }
+
+  .red-ball::after {
+    content: '';
+    position: absolute;
+    top: 15%;
+    left: 20%;
+    width: 35%;
+    height: 35%;
+    background: radial-gradient(circle, rgba(255,255,255,0.5) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .red-ball.potted {
+    background: linear-gradient(135deg, #333 0%, #1a1a1a 100%);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+    transform: scale(0.85);
+  }
+
+  .red-ball.potted::after {
+    display: none;
+  }
+
+  .free-ball-indicator {
+    display: none;
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.2) 0%, rgba(255, 107, 53, 0.1) 100%);
+    border: 1px solid var(--free-ball);
+    border-radius: 8px;
+    padding: 8px 12px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--free-ball);
+    font-weight: 600;
+    animation: pulse-border 2s infinite;
+  }
+
+  .free-ball-indicator.show {
+    display: block;
+  }
+
+  @keyframes pulse-border {
+    0%, 100% { border-color: var(--free-ball); box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.4); }
+    50% { border-color: #ffaa80; box-shadow: 0 0 10px rgba(255, 107, 53, 0.2); }
+  }
+
+  .black-ball-indicator {
+    display: none;
+    background: linear-gradient(135deg, rgba(26, 26, 26, 0.8) 0%, rgba(0, 0, 0, 0.9) 100%);
+    border: 2px solid #f0c040;
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 12px;
+    animation: pulse-gold 1.5s infinite;
+  }
+
+  .black-ball-indicator.show {
+    display: block;
+  }
+
+  .black-ball-indicator h3 {
+    color: #f0c040;
+    font-size: 1.2rem;
+    margin-bottom: 8px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+
+  .black-ball-indicator p {
+    color: #ccc;
+    font-size: 0.9rem;
+  }
+
+  @keyframes pulse-gold {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(240, 192, 64, 0.4); }
+    50% { box-shadow: 0 0 20px rgba(240, 192, 64, 0.6); }
+  }
+
+  .balls-section {
+    background: rgba(0,0,0,0.15);
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .section-title {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    text-align: center;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  #ball-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+  }
+
+  .ball-btn {
+    border: none;
+    border-radius: 50%;
+    width: 100%;
+    aspect-ratio: 1;
+    font-size: clamp(0.65rem, 2vw, 0.8rem);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 
+      0 4px 6px rgba(0,0,0,0.3),
+      inset 0 -2px 4px rgba(0,0,0,0.2),
+      inset 0 2px 4px rgba(255,255,255,0.3);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    font-family: inherit;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ball-btn::after {
+    content: '';
+    position: absolute;
+    top: 15%;
+    left: 20%;
+    width: 30%;
+    height: 30%;
+    background: radial-gradient(circle, rgba(255,255,255,0.4) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .ball-btn:hover:not(:disabled) { 
+    transform: translateY(-2px) scale(1.05); 
+    box-shadow: 
+      0 6px 12px rgba(0,0,0,0.4),
+      inset 0 -2px 4px rgba(0,0,0,0.2),
+      inset 0 2px 4px rgba(255,255,255,0.3);
+  }
+  .ball-btn:active:not(:disabled) { 
+    transform: translateY(0) scale(0.95); 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  .ball-btn:disabled { 
+    opacity: 0.2; 
+    cursor: not-allowed; 
+    transform: none;
+    filter: grayscale(100%);
+  }
+
+  .ball-btn.free-ball-mode {
+    box-shadow: 
+      0 0 0 2px var(--free-ball),
+      0 4px 6px rgba(0,0,0,0.3),
+      inset 0 -2px 4px rgba(0,0,0,0.2),
+      inset 0 2px 4px rgba(255,255,255,0.3);
+    animation: free-ball-pulse 1.5s infinite;
+  }
+
+  @keyframes free-ball-pulse {
+    0%, 100% { box-shadow: 0 0 0 2px var(--free-ball), 0 4px 6px rgba(0,0,0,0.3), inset 0 -2px 4px rgba(0,0,0,0.2), inset 0 2px 4px rgba(255,255,255,0.3); }
+    50% { box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.3), 0 4px 6px rgba(0,0,0,0.3), inset 0 -2px 4px rgba(0,0,0,0.2), inset 0 2px 4px rgba(255,255,255,0.3); }
+  }
+
+  .ball-btn.red    { background: radial-gradient(circle at 30% 30%, #ff6b6b, #8b0000); }
+  .ball-btn.yellow { background: radial-gradient(circle at 30% 30%, #ffd93d, #b8860b); color: #333; text-shadow: none; }
+  .ball-btn.green  { background: radial-gradient(circle at 30% 30%, #6bcf7f, #1a5f1a); }
+  .ball-btn.brown  { background: radial-gradient(circle at 30% 30%, #cd853f, #5a3010); }
+  .ball-btn.blue   { background: radial-gradient(circle at 30% 30%, #4a90e2, #003d82); }
+  .ball-btn.pink   { background: radial-gradient(circle at 30% 30%, #ff69b4, #c71585); }
+  .ball-btn.black  { background: radial-gradient(circle at 30% 30%, #4a4a4a, #0a0a0a); }
+
+  #actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .action-btn {
+    padding: 14px 8px;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .action-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    transition: left 0.5s;
+  }
+
+  .action-btn:hover::before {
+    left: 100%;
+  }
+
+  .action-btn:active { transform: scale(0.97); }
+  .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .action-btn .icon {
+    font-size: 1.2rem;
+  }
+
+  #btn-foul    { background: linear-gradient(135deg, #c53e3e 0%, #8b2a2a 100%); color: #fff; }
+  #btn-foul:hover { filter: brightness(1.1); }
+  
+  #btn-miss    { background: linear-gradient(135deg, #8b6914 0%, #5a4510 100%); color: #fff; }
+  #btn-miss:hover { filter: brightness(1.1); }
+  
+  #btn-undo    { background: linear-gradient(135deg, #3a4a5a 0%, #2a3a4a 100%); color: #ccc; }
+  #btn-undo:hover { filter: brightness(1.1); }
+  
+  #btn-concede { background: linear-gradient(135deg, #4a3a1a 0%, #2a2010 100%); color: #ddd; }
+  #btn-concede:hover { filter: brightness(1.1); }
+
+  #foul-panel {
+    display: none;
+    background: linear-gradient(135deg, #3a1a1a 0%, #2a1212 100%);
+    border: 1px solid rgba(197, 62, 62, 0.3);
+    border-radius: 16px;
+    padding: 16px;
+    animation: slideDown 0.3s ease;
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  #foul-panel h3 { 
+    font-size: 0.9rem; 
+    color: #ff8888; 
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #foul-panel .foul-balls {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .foul-ball-btn {
+    aspect-ratio: 1;
+    border: none; 
+    border-radius: 50%;
+    font-size: 0.75rem; 
+    font-weight: 700;
+    cursor: pointer; 
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    font-family: inherit;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .foul-ball-btn:active { transform: scale(0.95); }
+
+  .foul-ball-btn.red    { background: radial-gradient(circle at 30% 30%, #ff6b6b, #8b0000); }
+  .foul-ball-btn.yellow { background: radial-gradient(circle at 30% 30%, #ffd93d, #b8860b); color: #333; text-shadow: none; }
+  .foul-ball-btn.green  { background: radial-gradient(circle at 30% 30%, #6bcf7f, #1a5f1a); }
+  .foul-ball-btn.brown  { background: radial-gradient(circle at 30% 30%, #cd853f, #5a3010); }
+  .foul-ball-btn.blue   { background: radial-gradient(circle at 30% 30%, #4a90e2, #003d82); }
+  .foul-ball-btn.pink   { background: radial-gradient(circle at 30% 30%, #ff69b4, #c71585); }
+  .foul-ball-btn.black  { background: radial-gradient(circle at 30% 30%, #4a4a4a, #0a0a0a); }
+  .foul-ball-btn.cue 	{ background: radial-gradient(circle at 30% 30%, #A6A6A6, #FFFFFF); }
+
+  #foul-free-ball {
+    display: none;
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  #foul-free-ball p { 
+    font-size: 0.85rem; 
+    color: #c8e6a0; 
+    margin-bottom: 10px;
+    text-align: center;
+  }
+
+  .free-ball-choice { 
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px; 
+  }
+
+  .fb-btn {
+    padding: 12px;
+    border: none; 
+    border-radius: 10px;
+    font-size: 0.85rem; 
+    font-weight: 600;
+    cursor: pointer; 
+    color: #fff;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+
+  .fb-btn:first-child { background: linear-gradient(135deg, #ff6b35 0%, #cc5522 100%); }
+  .fb-btn:last-child { background: linear-gradient(135deg, #4a4a4a 0%, #2a2a2a 100%); }
+  .fb-btn:active { transform: scale(0.97); }
+
+  #btn-cancel-foul {
+    width: 100%;
+    margin-top: 12px;
+    background: rgba(255,255,255,0.1);
+    color: #aaa;
+    padding: 10px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+
+  #btn-cancel-foul:hover { background: rgba(255,255,255,0.15); }
+
+  #log-container {
+    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.05);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 120px;
+    max-height: 200px;
+  }
+
+  .log-header {
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  #log {
+    padding: 8px 12px;
+    overflow-y: auto;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    flex: 1;
+  }
+
+  #log .log-entry { 
+    padding: 6px 0; 
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  #log .log-entry:last-child { border-bottom: none; }
+  
+  #log .log-time {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #log .log-text {
+    flex: 1;
+  }
+
+  #log .log-p1 { color: #88ccff; }
+  #log .log-p2 { color: #ffcc88; }
+  #log .log-foul { color: #ff8888; }
+  #log .log-system { color: #aaa; font-style: italic; }
+  #log .log-free-ball { color: #ff6b35; font-weight: 600; }
+  #log .log-black-ball { color: #f0c040; font-weight: 700; }
+
+  #bottom-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding-top: 8px;
+  }
+
+  .bottom-btn {
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .bottom-btn:active { transform: scale(0.97); }
+
+  #btn-new-frame { 
+    background: linear-gradient(135deg, #1a5a3a 0%, #0f3a2a 100%); 
+    color: #c8e6a0; 
+    box-shadow: 0 4px 6px rgba(26, 90, 58, 0.3);
+  }
+  #btn-new-frame:hover { filter: brightness(1.1); }
+
+  #btn-new-match { 
+    background: linear-gradient(135deg, #4a4a4a 0%, #2a2a2a 100%); 
+    color: #ccc; 
+  }
+  #btn-new-match:hover { filter: brightness(1.1); }
+
+  #end-overlay {
+    display: none;
+    position: fixed; 
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(5px);
+  }
+
+  #end-overlay.show { display: flex; }
+
+  #end-box {
+    background: linear-gradient(135deg, #243824 0%, #1a2e1a 100%);
+    border: 2px solid var(--accent-gold);
+    border-radius: 20px;
+    padding: 32px 24px;
+    text-align: center;
+    width: 100%;
+    max-width: 320px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  #end-box h2 { 
+    font-size: 1.5rem; 
+    color: var(--accent-gold); 
+    margin-bottom: 8px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  
+  #end-box p  { 
+    font-size: 0.9rem; 
+    color: var(--text-secondary); 
+    margin-bottom: 20px;
+  }
+
+  #end-box .end-scores {
+    display: flex; 
+    gap: 24px; 
+    justify-content: center; 
+    margin-bottom: 24px;
+    background: rgba(0,0,0,0.2);
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  #end-box .end-score-col { 
+    text-align: center;
+    flex: 1;
+  }
+  
+  #end-box .end-score-col .name { 
+    font-size: 0.85rem; 
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  
+  #end-box .end-score-col .val  { 
+    font-size: 2.5rem; 
+    font-weight: 700; 
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  #end-box .end-btns { 
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px; 
+  }
+  
+  #end-box .end-btns button {
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+  
+  #end-box .end-btns button:active { transform: scale(0.97); }
+  
+  #btn-end-new-frame { 
+    background: linear-gradient(135deg, #1a5a3a 0%, #0f3a2a 100%); 
+    color: #c8e6a0; 
+  }
+  #btn-end-new-match { 
+    background: linear-gradient(135deg, #4a4a4a 0%, #2a2a2a 100%); 
+    color: #ccc; 
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.3);
+  }
+
+  @media (max-width: 380px) {
+    #ball-grid {
+      gap: 6px;
+    }
+    .ball-btn {
+      font-size: 0.6rem;
+    }
+    .stats-grid {
+      font-size: 0.65rem;
+    }
+    .reds-grid {
+      gap: 4px;
+    }
+  }
+
+  @media (min-width: 600px) {
+    body {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+  }
+
+  body {
+    overscroll-behavior: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>✪斯诺克计分器✪</h1>
+  <div class="subtitle">💎SNOOKER SCORER💎</div>
+</div>
+
+<div id="voice-bar">
+  <button id="btn-voice" class="on" onclick="toggleVoice()">
+    <span id="voice-icon">🔊</span>
+    <span id="voice-text">语音播报开启</span>
+  </button>
+</div>
+
+<div id="scoreboard">
+  <div class="player-card" id="card-p1">
+    <div class="player-header">
+      <div class="turn-arrow" id="arrow-p1"></div>
+      <div class="player-name">
+        <input type="text" id="name-p1" value="选手一" maxlength="10">
+      </div>
+    </div>
+    <div class="score" id="score-p1">0</div>
+    <div class="stats-grid">
+      <div class="stat-item">
+        <span class="stat-label">本轮</span>
+        <span class="stat-value" id="break-p1">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">最佳</span>
+        <span class="stat-value" id="best-p1">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">局数</span>
+        <span class="stat-value" id="frames-p1">0</span>
+      </div>
+    </div>
+  </div>
+  <div class="player-card" id="card-p2">
+    <div class="player-header">
+      <div class="player-name">
+        <input type="text" id="name-p2" value="选手二" maxlength="10">
+      </div>
+      <div class="turn-arrow" id="arrow-p2"></div>
+    </div>
+    <div class="score" id="score-p2">0</div>
+    <div class="stats-grid">
+      <div class="stat-item">
+        <span class="stat-label">本轮</span>
+        <span class="stat-value" id="break-p2">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">最佳</span>
+        <span class="stat-value" id="best-p2">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">局数</span>
+        <span class="stat-value" id="frames-p2">0</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="status-bar">
+  <div class="status-header">
+    <span id="phase-label">阶段：红球与彩球</span>
+    <span id="remaining-info">剩余红球：<span>15</span> · 最高可得：<span id="max-remaining">147</span></span>
+  </div>
+  <div class="reds-container">
+    <div class="reds-label">
+      <span>红球进度</span>
+      <span id="reds-count">15/15</span>
+    </div>
+    <div class="reds-grid" id="reds-grid"></div>
+  </div>
+</div>
+
+<div class="free-ball-indicator" id="free-ball-indicator">
+  🎯 自由球模式：请选择一颗彩球作为红球击打（得1分）
+</div>
+
+<div class="black-ball-indicator" id="black-ball-indicator">
+  <h3>⚫ 争黑球阶段</h3>
+  <p>双方平分，先入袋黑球者获胜！</p>
+</div>
+
+<div class="balls-section">
+  <div class="section-title" id="ball-section-title">选择入袋球</div>
+  <div id="ball-grid">
+    <button class="ball-btn red"    id="btn-red"    onclick="potBall('red',1)">红<br>1</button>
+    <button class="ball-btn yellow" id="btn-yellow" onclick="potBall('yellow',2)">黄<br>2</button>
+    <button class="ball-btn green"  id="btn-green"  onclick="potBall('green',3)">绿<br>3</button>
+    <button class="ball-btn brown"  id="btn-brown"  onclick="potBall('brown',4)">棕<br>4</button>
+    <button class="ball-btn blue"   id="btn-blue"   onclick="potBall('blue',5)">蓝<br>5</button>
+    <button class="ball-btn pink"   id="btn-pink"   onclick="potBall('pink',6)">粉<br>6</button>
+    <button class="ball-btn black"  id="btn-black"  onclick="potBall('black',7)">黑<br>7</button>
+  </div>
+</div>
+
+<div id="actions">
+  <button class="action-btn" id="btn-foul" onclick="openFoulPanel()">
+    <!-- <span class="icon"></span> -->
+    <span>⚠️ 犯规 / 罚分</span>
+  </button>
+  <button class="action-btn" id="btn-miss" onclick="endTurn('miss')">
+    <!-- <span class="icon"></span> -->
+    <span>🔄 未入袋 / 换手</span>
+  </button>
+  <button class="action-btn" id="btn-undo" onclick="undo()">
+    <!-- <span class="icon"></span> -->
+    <span>↩️ 撤销上一步</span>
+  </button>
+  <button class="action-btn" id="btn-concede" onclick="concede()">
+    <!-- <span class="icon"></span> -->
+    <span>🏳️ 认负本局</span>
+  </button>
+</div>
+
+<div id="foul-panel">
+  <h3>⚠️ 犯规 — 选择接触到的球</h3>
+  <div class="foul-balls">
+    <button class="foul-ball-btn red"    onclick="applyFoul('red',1)">红<br>1</button>
+    <button class="foul-ball-btn yellow" onclick="applyFoul('yellow',2)">黄<br>2</button>
+    <button class="foul-ball-btn green"  onclick="applyFoul('green',3)">绿<br>3</button>
+    <button class="foul-ball-btn brown"  onclick="applyFoul('brown',4)">棕<br>4</button>
+    <button class="foul-ball-btn blue"   onclick="applyFoul('blue',5)">蓝<br>5</button>
+    <button class="foul-ball-btn pink"   onclick="applyFoul('pink',6)">粉<br>6</button>
+    <button class="foul-ball-btn black"  onclick="applyFoul('black',7)">黑<br>7</button>
+    <button class="foul-ball-btn cue"    onclick="applyFoul('cue',4)">白<br>4</button>
+  </div>
+  <div id="foul-free-ball">
+    <p>犯规后对手被斯诺克 — 是否给予自由球？</p>
+    <div class="free-ball-choice">
+      <button class="fb-btn" onclick="awardFreeBall(true)">是 — 给予自由球</button>
+      <button class="fb-btn" onclick="awardFreeBall(false)">否</button>
+    </div>
+  </div>
+  <button id="btn-cancel-foul" onclick="closeFoulPanel()">取消</button>
+</div>
+
+<div id="log-container">
+  <div class="log-header">
+    <span>操作记录</span>
+    <span style="font-size: 0.7rem; color: #666;">实时更新</span>
+  </div>
+  <div id="log">
+    <div class="log-entry log-system">
+      <span class="log-time">--:--:--</span>
+      <span class="log-text">比赛开始，祝您好运！</span>
+    </div>
+  </div>
+</div>
+
+<div id="bottom-actions">
+  <button class="bottom-btn" id="btn-new-frame" onclick="newFrame()">
+    <span>⚪</span> 新局
+  </button>
+  <button class="bottom-btn" id="btn-new-match" onclick="newMatch()">
+    <span>🔄</span> 新赛
+  </button>
+</div>
+
+<div id="end-overlay">
+  <div id="end-box">
+    <h2 id="end-title">本局结束</h2>
+    <p id="end-desc"></p>
+    <div class="end-scores">
+      <div class="end-score-col">
+        <div class="name" id="end-name-p1">选手一</div>
+        <div class="val"  id="end-val-p1">0</div>
+      </div>
+      <div class="end-score-col">
+        <div class="name" id="end-name-p2">选手二</div>
+        <div class="val"  id="end-val-p2">0</div>
+      </div>
+    </div>
+    <div class="end-btns">
+      <button id="btn-end-new-frame" onclick="newFrame()">新局</button>
+      <button id="btn-end-new-match" onclick="newMatch()">新赛</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let voiceEnabled = true;
+let zhVoice = null;
+
+function loadZhVoice() {
+  const voices = speechSynthesis.getVoices();
+  zhVoice = voices.find(v => v.lang === 'zh-CN') ||
+            voices.find(v => v.lang.startsWith('zh')) ||
+            null;
+}
+if (typeof speechSynthesis !== 'undefined') {
+  speechSynthesis.onvoiceschanged = loadZhVoice;
+  loadZhVoice();
+}
+
+function speak(text) {
+  if (!voiceEnabled) return;
+  if (typeof speechSynthesis === 'undefined') return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'zh-CN';
+  u.rate = 0.95;
+  u.pitch = 1;
+  if (zhVoice) u.voice = zhVoice;
+  speechSynthesis.speak(u);
+}
+
+function toggleVoice() {
+  voiceEnabled = !voiceEnabled;
+  const btn = document.getElementById('btn-voice');
+  const icon = document.getElementById('voice-icon');
+  const text = document.getElementById('voice-text');
+  
+  if (voiceEnabled) {
+    icon.textContent = '🔊';
+    text.textContent = '语音播报开启';
+    btn.className = 'on';
+    speak('语音播报已开启');
+  } else {
+    icon.textContent = '🔇';
+    text.textContent = '语音播报关闭';
+    btn.className = 'off';
+    speechSynthesis.cancel();
+  }
+}
+
+const ZH = {
+  red:'红球', yellow:'黄球', green:'绿球',
+  brown:'棕球', blue:'蓝球', pink:'粉球', black:'黑球', cue:'白球'
+};
+
+const COLOURS_ORDER = ['yellow','green','brown','blue','pink','black'];
+const COLOUR_VALUES = { red:1, yellow:2, green:3, brown:4, blue:5, pink:6, black:7 };
+
+let state = {};
+let history = [];
+let matchFrames = [0, 0];
+let is147Attempt = false;
+let freeBallState = null;
+let isBlackBallPhase = false; // 争黑球阶段
+
+function initState() {
+  return {
+    scores: [0, 0],
+    currentBreaks: [0, 0],
+    bestBreaks: [0, 0],
+    turn: 0,
+    redsLeft: 15,
+    nextIsRed: true,
+    phase: 'reds',
+    coloursIdx: 0,
+    frameOver: false,
+  };
+}
+
+function deepCopy(s) { return JSON.parse(JSON.stringify(s)); }
+function saveHistory() { 
+  const hist = deepCopy(state);
+  hist.freeBallState = deepCopy(freeBallState);
+  hist.isBlackBallPhase = isBlackBallPhase;
+  history.push(hist); 
+  if (history.length > 50) history.shift(); 
+}
+
+function restoreHistory(hist) {
+  state = deepCopy(hist);
+  freeBallState = deepCopy(hist.freeBallState || null);
+  isBlackBallPhase = hist.isBlackBallPhase || false;
+}
+
+state = initState();
+freeBallState = null;
+isBlackBallPhase = false;
+renderAll();
+setTimeout(() => speak('斯诺克计分器已就绪，比赛开始，祝您好运'), 800);
+
+function potBall(colour, value) {
+  if (state.frameOver) return;
+  saveHistory();
+
+  const p = state.turn;
+  const pName = playerName(p);
+
+  // 争黑球阶段
+  if (isBlackBallPhase) {
+    if (colour !== 'black') {
+      showToast('争黑球阶段只能击打黑球！');
+      history.pop();
+      return;
+    }
+    state.scores[p] += 7;
+    state.currentBreaks[p] += 7;
+    addLog(`${pName} 争黑球入袋（+7）`, p, false, false, true);
+    speak(`${pName} 黑球入袋，获胜！`);
+    updateBestBreak(p);
+    renderAll();
+    // 争黑球结束，显示获胜
+    setTimeout(() => {
+      endFrame('black', p);
+    }, 1000);
+    return;
+  }
+
+  // 处理自由球
+  if (freeBallState && freeBallState.active) {
+    handleFreeBallPot(colour, value, p, pName);
+    return;
+  }
+
+  // 正常击球逻辑
+  if (state.phase === 'reds') {
+    if (state.nextIsRed) {
+      if (colour !== 'red') { 
+        showToast('必须先打红球！'); 
+        history.pop(); 
+        return; 
+      }
+      state.scores[p] += 1;
+      state.currentBreaks[p] += 1;
+      state.redsLeft--;
+      state.nextIsRed = false;
+      
+      if (state.scores[p] === 1 && state.currentBreaks[p] === 1) {
+        is147Attempt = true;
+      }
+      
+      addLog(`${pName} 打入红球（+1）`, p);
+      speak(`${pName}，红球，一分`);
+    } else {
+      if (colour === 'red') { 
+        showToast('已打入红球，请选择彩球！'); 
+        history.pop(); 
+        return; 
+      }
+      state.scores[p] += value;
+      state.currentBreaks[p] += value;
+      addLog(`${pName} 打入${ZH[colour]}（+${value}）`, p);
+      speak(`${pName}，${ZH[colour]}，${value}分`);
+      
+      if (is147Attempt && colour !== 'black' && state.scores[p] < 120) {
+        is147Attempt = false;
+      }
+      
+      if (state.redsLeft === 0) {
+        state.phase = 'colours';
+        state.coloursIdx = 0;
+        addLog('红球全部入袋 — 彩球阶段开始', -1);
+        speak('红球全部入袋，彩球阶段开始');
+      } else {
+        state.nextIsRed = true;
+      }
+    }
+  } else {
+    // 彩球阶段
+    const expected = COLOURS_ORDER[state.coloursIdx];
+    if (colour !== expected) {
+      showToast(`下一颗必须打${ZH[expected]}（${COLOUR_VALUES[expected]}分）！`);
+      history.pop();
+      return;
+    }
+    state.scores[p] += value;
+    state.currentBreaks[p] += value;
+    addLog(`${pName} 打入${ZH[colour]}（+${value}）`, p);
+    speak(`${pName}，${ZH[colour]}，${value}分`);
+    state.coloursIdx++;
+    
+    if (state.coloursIdx >= COLOURS_ORDER.length) {
+      handleClearance(p, pName);
+      return;
+    }
+  }
+
+  updateBestBreak(p);
+  renderAll();
+}
+
+// 处理清台
+function handleClearance(p, pName) {
+  addLog('清彩完毕！', -1);
+  
+  const s0 = state.scores[0];
+  const s1 = state.scores[1];
+  
+  if (state.scores[p] === 147 && is147Attempt) {
+    // 147满分
+    speak(`恭喜${pName}！满分147分！太精彩了！`);
+    showToast('🎉 恭喜获得满分147分！', 3000);
+    updateBestBreak(p);
+    renderAll();
+    setTimeout(() => {
+      endFrame('147', p);
+    }, 3000);
+  } else if (s0 !== s1) {
+    // 有分差，超分者获胜
+    const winner = s0 > s1 ? 0 : 1;
+    const winnerName = playerName(winner);
+    speak(`清彩完毕，${winnerName} 获胜！`);
+    showToast(`清彩完毕，${winnerName} 获胜！`);
+    updateBestBreak(p);
+    renderAll();
+    setTimeout(() => {
+      endFrame('clearance', winner);
+    }, 2000);
+  } else {
+    // 平分，进入争黑球
+    isBlackBallPhase = true;
+    addLog('双方平分 — 争黑球阶段开始！', -1, false, false, true);
+    speak('双方平分，争黑球，先入袋者获胜！');
+    showToast('⚫ 争黑球！先入袋黑球者获胜！');
+    updateBestBreak(p);
+    renderAll();
+  }
+  
+  is147Attempt = false;
+}
+
+// 处理自由球入袋 - 完全优化后的规则
+function handleFreeBallPot(colour, value, p, pName) {
+  if (freeBallState.type === 'red') {
+    // 有红球时的自由球：选择彩球击打，记1分（当红球）
+    if (colour === 'red') {
+      showToast('自由球模式下不能击打红球！请选择彩球当红球击打');
+      history.pop();
+      return;
+    }
+    
+    state.scores[p] += 1;
+    state.currentBreaks[p] += 1;
+    addLog(`${pName} 自由球打入${ZH[colour]}当红球（+1）`, p, false, true);
+    speak(`${pName}，自由球${ZH[colour]}，一分`);
+    
+    // 彩球复位，进入下一步：击打任一彩球记其分值
+    freeBallState = { active: true, type: 'colour_after_free', nominatedColour: colour };
+    addLog(`${ZH[colour]}复位 — 请选择任一彩球击打记其分值`, -1);
+    speak(`${ZH[colour]}复位，请选择彩球击打`);
+    
+  } else if (freeBallState.type === 'colour_after_free') {
+    // 自由球后：击打任一彩球记其分值，然后正常从红球开始
+    state.scores[p] += value;
+    state.currentBreaks[p] += value;
+    addLog(`${pName} 自由球后打入${ZH[colour]}（+${value}）`, p, false, true);
+    speak(`${pName}，${ZH[colour]}，${value}分`);
+    
+    // 彩球复位，自由球结束，回到正常红球阶段
+    freeBallState = null;
+    
+    if (state.phase === 'reds' && state.redsLeft > 0) {
+      state.nextIsRed = true;
+      addLog(`${ZH[colour]}复位 — 正常从红球开始`, -1);
+      speak(`${ZH[colour]}复位，正常从红球开始`);
+    }
+    
+  } else if (freeBallState.type === 'colour') {
+    // 彩球阶段自由球：击打非目标彩球记目标球分值
+    const targetColour = COLOURS_ORDER[state.coloursIdx];
+    const targetValue = COLOUR_VALUES[targetColour];
+    
+    if (colour === targetColour) {
+      showToast(`自由球模式下不能击打目标球${ZH[targetColour]}，请选择其他彩球！`);
+      history.pop();
+      return;
+    }
+    
+    // 记目标球分值
+    state.scores[p] += targetValue;
+    state.currentBreaks[p] += targetValue;
+    addLog(`${pName} 自由球打入${ZH[colour]}作为${ZH[targetColour]}（+${targetValue}）`, p, false, true);
+    speak(`${pName}，自由球${ZH[colour]}作为${ZH[targetColour]}，${targetValue}分`);
+    
+    // 彩球复位，自由球结束，继续从目标球开始
+    freeBallState = null;
+    addLog(`${ZH[colour]}复位 — 继续击打${ZH[targetColour]}`, -1);
+    speak(`${ZH[colour]}复位，继续击打${ZH[targetColour]}`);
+  }
+  
+  updateBestBreak(p);
+  renderAll();
+}
+
+// 更换选手/换手 - 优化后的规则
+function endTurn(reason) {
+  if (state.frameOver) return;
+  saveHistory();
+  const p = state.turn;
+  if (reason === 'miss') {
+    addLog(`${playerName(p)} 未入袋 — 换手`, p);
+    speak(`${playerName(p)}，未入袋，换手`);
+  }
+  state.currentBreaks[p] = 0;
+  is147Attempt = false;
+  freeBallState = null;
+  state.turn = 1 - state.turn;
+  
+  // 更换选手后，根据台面情况决定下一杆（优化后的规则）
+  if (state.phase === 'reds' && state.redsLeft > 0) {
+    // 有红球时，必须从红球开始
+    state.nextIsRed = true;
+    addLog(`${playerName(state.turn)} 上场 — 从红球开始`, -1);
+    speak(`${playerName(state.turn)} 上场，从红球开始`);
+  } else if (state.phase === 'colours') {
+    // 无红球时，从目标彩球开始
+    const nextColour = COLOURS_ORDER[state.coloursIdx];
+    addLog(`${playerName(state.turn)} 上场 — 从${ZH[nextColour]}开始`, -1);
+    speak(`${playerName(state.turn)} 上场，从${ZH[nextColour]}开始`);
+  }
+  
+  renderAll();
+}
+
+// 犯规后处理 - 优化后的规则（未获得自由球时）
+function awardFreeBall(yes) {
+  const p = state.turn; // 当前犯规方
+  const opp = 1 - p;    // 获得自由球的一方
+  
+  if (yes) {
+    addLog(`${playerName(opp)} 获得自由球`, -1, false, true);
+    speak(`${playerName(opp)} 获得自由球`);
+    
+    // 关键优化：立即切换到获得自由球的选手
+    state.turn = opp;
+    state.currentBreaks[p] = 0; // 犯规方本轮得分清零
+    is147Attempt = false;
+    
+    // 根据当前阶段设置自由球类型
+    if (state.phase === 'reds' && state.redsLeft > 0) {
+      // 有红球时：自由球作为红球，先选择彩球击打记1分
+      freeBallState = { active: true, type: 'red', targetColour: null };
+      addLog(`${playerName(opp)} 上场 — 自由球：请选择彩球当红球击打（记1分）`, -1);
+      speak(`${playerName(opp)} 上场，自由球，请选择彩球当红球击打`);
+    } else if (state.phase === 'reds' && !state.nextIsRed) {
+      // 该打彩球时获得自由球（这种情况较少见）
+      freeBallState = { active: true, type: 'colour_after_free', targetColour: null };
+      addLog(`${playerName(opp)} 上场 — 自由球：请击打彩球`, -1);
+      speak(`${playerName(opp)} 上场，自由球，请击打彩球`);
+    } else {
+      // 彩球阶段（无红球）：击打非目标彩球记目标球分值
+      const target = COLOURS_ORDER[state.coloursIdx];
+      freeBallState = { active: true, type: 'colour', targetColour: target };
+      addLog(`${playerName(opp)} 上场 — 自由球：请击打非目标球作为${ZH[target]}`, -1);
+      speak(`${playerName(opp)} 上场，自由球，请击打非目标球作为${ZH[target]}`);
+    }
+  } else {
+    // 不给自由球，切换选手
+    state.turn = opp;
+    freeBallState = null;
+    state.currentBreaks[p] = 0;
+    is147Attempt = false;
+    
+    // 更换选手后，根据台面情况决定下一杆
+    if (state.phase === 'reds' && state.redsLeft > 0) {
+      state.nextIsRed = true;
+      addLog(`${playerName(state.turn)} 上场 — 从红球开始`, -1);
+      speak(`${playerName(state.turn)} 上场，从红球开始`);
+    } else if (state.phase === 'colours') {
+      const nextColour = COLOURS_ORDER[state.coloursIdx];
+      addLog(`${playerName(state.turn)} 上场 — 从${ZH[nextColour]}开始`, -1);
+      speak(`${playerName(state.turn)} 上场，从${ZH[nextColour]}开始`);
+    }
+  }
+  closeFoulPanel();
+  renderAll();
+}
+
+function openFoulPanel() {
+  if (state.frameOver) return;
+  document.getElementById('foul-panel').style.display = 'block';
+  document.getElementById('foul-free-ball').style.display = 'none';
+  document.getElementById('foul-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeFoulPanel() {
+  document.getElementById('foul-panel').style.display = 'none';
+  document.getElementById('foul-free-ball').style.display = 'none';
+}
+
+let pendingFoulPenalty = 0;
+
+function applyFoul(colour, value) {
+  const penalty = Math.max(4, value);
+  pendingFoulPenalty = penalty;
+
+  const p = state.turn;
+  const opp = 1 - p;
+  const pName = playerName(p);
+  const oppName = playerName(opp);
+
+  saveHistory();
+  state.scores[opp] += penalty;
+  state.currentBreaks[p] = 0;
+  is147Attempt = false;
+  freeBallState = null;
+  addLog(`${pName} 犯规 — ${oppName} 获得 ${penalty} 分（${ZH[colour]}）`, -1, true);
+  speak(`${pName} 犯规，${oppName} 获得 ${penalty} 分`);
+
+  document.getElementById('foul-free-ball').style.display = 'block';
+  renderAll();
+}
+
+function awardFreeBall(yes) {
+  const opp = 1 - state.turn;
+  if (yes) {
+    addLog(`${playerName(opp)} 获得自由球`, -1, false, true);
+    speak(`${playerName(opp)} 获得自由球`);
+    
+    // 根据当前阶段设置自由球类型
+    if (state.phase === 'reds' && state.nextIsRed) {
+      // 有红球时：自由球作为红球
+      freeBallState = { active: true, type: 'red', targetColour: null };
+    } else if (state.phase === 'reds' && !state.nextIsRed) {
+      // 该打彩球时获得自由球
+      freeBallState = { active: true, type: 'colour_after_free', targetColour: null };
+    } else {
+      // 彩球阶段：作为目标球
+      const target = COLOURS_ORDER[state.coloursIdx];
+      freeBallState = { active: true, type: 'colour', targetColour: target };
+    }
+  } else {
+    state.turn = opp;
+  }
+  closeFoulPanel();
+  renderAll();
+}
+
+function undo() {
+  if (history.length === 0) { 
+    addLog('没有可撤销的操作', -1); 
+    speak('没有可撤销的操作'); 
+    return; 
+  }
+  const hist = history.pop();
+  restoreHistory(hist);
+  addLog('↩ 已撤销', -1);
+  speak('已撤销');
+  renderAll();
+}
+
+function concede() {
+  if (state.frameOver) return;
+  const p = state.turn;
+  const winner = 1 - p;
+  addLog(`${playerName(p)} 认负本局 — ${playerName(winner)} 获胜`, -1);
+  speak(`${playerName(p)} 认负，${playerName(winner)} 获胜，本局结束`);
+  endFrame('concede', winner);
+}
+
+function endFrame(reason, winner) {
+  state.frameOver = true;
+  is147Attempt = false;
+  freeBallState = null;
+  isBlackBallPhase = false;
+  const s0 = state.scores[0], s1 = state.scores[1];
+
+  addLog('本局结束！', -1);
+
+  const n0 = playerName(0), n1 = playerName(1);
+  document.getElementById('end-name-p1').textContent = n0;
+  document.getElementById('end-name-p2').textContent = n1;
+  document.getElementById('end-val-p1').textContent = s0;
+  document.getElementById('end-val-p2').textContent = s1;
+
+  if (winner === -1) {
+    document.getElementById('end-title').textContent = '本局平局！';
+    document.getElementById('end-desc').textContent = '双方平分本局。';
+    speak('本局平局');
+  } else {
+    matchFrames[winner]++;
+    const winName = winner === 0 ? n0 : n1;
+    document.getElementById('end-title').textContent = `${winName} 赢得本局！`;
+    document.getElementById('end-desc').textContent =
+      `赛事比分：${n0} ${matchFrames[0]} – ${matchFrames[1]} ${n1}`;
+    speak(`${winName} 赢得本局！赛事比分，${n0} ${matchFrames[0]} 比 ${matchFrames[1]} ${n1}`);
+  }
+
+  document.getElementById('end-overlay').classList.add('show');
+  renderAll();
+}
+
+function calcMaxRemaining() {
+  if (isBlackBallPhase) return 7;
+  if (state.phase === 'reds') {
+    return state.redsLeft * 8 + (2+3+4+5+6+7);
+  } else {
+    let sum = 0;
+    for (let i = state.coloursIdx; i < COLOURS_ORDER.length; i++) {
+      sum += COLOUR_VALUES[COLOURS_ORDER[i]];
+    }
+    return sum;
+  }
+}
+
+function updateBestBreak(p) {
+  if (state.currentBreaks[p] > state.bestBreaks[p]) {
+    state.bestBreaks[p] = state.currentBreaks[p];
+  }
+}
+
+function newFrame() {
+  const savedBest = [
+    Math.max(state.bestBreaks[0], parseInt(document.getElementById('best-p1').textContent)||0),
+    Math.max(state.bestBreaks[1], parseInt(document.getElementById('best-p2').textContent)||0),
+  ];
+  history = [];
+  state = initState();
+  state.bestBreaks = savedBest;
+  is147Attempt = false;
+  freeBallState = null;
+  isBlackBallPhase = false;
+  document.getElementById('end-overlay').classList.remove('show');
+  clearLog();
+  addLog('新局开始，祝您好运！', -1);
+  speak('新局开始，祝您好运');
+  renderAll();
+}
+
+function newMatch() {
+  matchFrames = [0, 0];
+  history = [];
+  state = initState();
+  is147Attempt = false;
+  freeBallState = null;
+  isBlackBallPhase = false;
+  document.getElementById('end-overlay').classList.remove('show');
+  clearLog();
+  addLog('新赛开始，祝您好运！', -1);
+  speak('新赛开始，祝您好运');
+  renderAll();
+}
+
+function renderAll() {
+  const p = state.turn;
+
+  document.getElementById('score-p1').textContent = state.scores[0];
+  document.getElementById('score-p2').textContent = state.scores[1];
+  document.getElementById('break-p1').textContent = state.currentBreaks[0];
+  document.getElementById('break-p2').textContent = state.currentBreaks[1];
+  document.getElementById('best-p1').textContent  = state.bestBreaks[0];
+  document.getElementById('best-p2').textContent  = state.bestBreaks[1];
+  document.getElementById('frames-p1').textContent = matchFrames[0];
+  document.getElementById('frames-p2').textContent = matchFrames[1];
+
+  const cardP1 = document.getElementById('card-p1');
+  const cardP2 = document.getElementById('card-p2');
+  
+  if (p === 0 && !state.frameOver) {
+    cardP1.classList.add('active');
+    cardP2.classList.remove('active');
+  } else if (p === 1 && !state.frameOver) {
+    cardP1.classList.remove('active');
+    cardP2.classList.add('active');
+  } else {
+    cardP1.classList.remove('active');
+    cardP2.classList.remove('active');
+  }
+
+  const redsGrid = document.getElementById('reds-grid');
+  redsGrid.innerHTML = '';
+  for (let i = 0; i < 15; i++) {
+    const ball = document.createElement('div');
+    ball.className = 'red-ball' + (i >= state.redsLeft ? ' potted' : '');
+    redsGrid.appendChild(ball);
+  }
+  document.getElementById('reds-count').textContent = `${state.redsLeft}/15`;
+
+  const maxRem = calcMaxRemaining();
+  document.getElementById('remaining-info').innerHTML =
+    `剩余红球：<span>${state.redsLeft}</span> · 最高可得：<span id="max-remaining">${maxRem}</span>`;
+
+  // 争黑球指示器
+  const blackBallIndicator = document.getElementById('black-ball-indicator');
+  if (isBlackBallPhase) {
+    blackBallIndicator.classList.add('show');
+    document.getElementById('phase-label').textContent = '阶段：争黑球';
+  } else {
+    blackBallIndicator.classList.remove('show');
+    if (state.phase === 'reds') {
+      document.getElementById('phase-label').textContent =
+        state.nextIsRed ? '阶段：打红球' : '阶段：打彩球';
+    } else {
+      const next = COLOURS_ORDER[state.coloursIdx];
+      document.getElementById('phase-label').textContent = next
+        ? `阶段：彩球顺序 — 打${ZH[next]}（${COLOUR_VALUES[next]}分）`
+        : '阶段：清彩完毕';
+    }
+  }
+
+  // 自由球提示
+  const freeBallIndicator = document.getElementById('free-ball-indicator');
+  const ballSectionTitle = document.getElementById('ball-section-title');
+  
+  if (freeBallState && freeBallState.active) {
+    freeBallIndicator.classList.add('show');
+    if (freeBallState.type === 'red') {
+      freeBallIndicator.textContent = '🎯 自由球模式：请选择一颗彩球作为红球击打（得1分）';
+      ballSectionTitle.textContent = '自由球：选择彩球当红球';
+    } else if (freeBallState.type === 'colour_after_free') {
+      freeBallIndicator.textContent = '🎯 自由球后：请击打彩球记其分值';
+      ballSectionTitle.textContent = '自由球后：击打彩球记分值';
+    } else if (freeBallState.type === 'colour') {
+      const target = COLOURS_ORDER[state.coloursIdx];
+      freeBallIndicator.textContent = `🎯 自由球模式：击打非目标球作为${ZH[target]}`;
+      ballSectionTitle.textContent = `自由球：击打其他彩球作为${ZH[target]}`;
+    }
+  } else {
+    freeBallIndicator.classList.remove('show');
+    if (isBlackBallPhase) {
+      ballSectionTitle.textContent = '⚫ 争黑球：击打黑球决胜负';
+    } else if (state.phase === 'reds') {
+      ballSectionTitle.textContent = state.nextIsRed ? '选择入袋球：红球' : '选择入袋球：彩球';
+    } else {
+      const next = COLOURS_ORDER[state.coloursIdx];
+      ballSectionTitle.textContent = next ? `选择入袋球：${ZH[next]}` : '清彩完毕';
+    }
+  }
+
+  // 球按钮控制
+  const disabled = state.frameOver;
+  const targetColour = isBlackBallPhase ? 'black' : 
+                       (state.phase === 'colours' ? COLOURS_ORDER[state.coloursIdx] : null);
+  
+  ['red','yellow','green','brown','blue','pink','black'].forEach(c => {
+    const btn = document.getElementById('btn-' + c);
+    btn.classList.remove('free-ball-mode');
+    let on = !disabled;
+    
+    if (!disabled && isBlackBallPhase) {
+      // 争黑球阶段：只能打黑球
+      on = (c === 'black');
+    } else if (!disabled && freeBallState && freeBallState.active) {
+      if (freeBallState.type === 'red') {
+        // 彩球当红球打，所有彩球可用
+        on = (c !== 'red');
+        if (on) btn.classList.add('free-ball-mode');
+      } else if (freeBallState.type === 'colour_after_free') {
+        // 自由球后打彩球，所有彩球可用
+        on = (c !== 'red');
+      } else if (freeBallState.type === 'colour') {
+        // 彩球阶段自由球：目标球不可用，其他彩球可用
+        const target = COLOURS_ORDER[state.coloursIdx];
+        on = (c !== 'red' && c !== target);
+        if (on) btn.classList.add('free-ball-mode');
+      }
+    } else if (!disabled) {
+      if (state.phase === 'reds') {
+        on = state.nextIsRed ? (c === 'red') : (c !== 'red');
+      } else {
+        on = (c === COLOURS_ORDER[state.coloursIdx]);
+      }
+    }
+    
+    btn.disabled = !on;
+  });
+
+  ['btn-foul','btn-miss','btn-undo','btn-concede'].forEach(id => {
+    document.getElementById(id).disabled = state.frameOver;
+  });
+}
+
+function addLog(msg, player, isFoul, isFreeBall, isBlackBall) {
+  const log = document.getElementById('log');
+  const div = document.createElement('div');
+  let className = 'log-entry ';
+  if (isFoul) className += 'log-foul';
+  else if (isBlackBall) className += 'log-black-ball';
+  else if (isFreeBall) className += 'log-free-ball';
+  else if (player === 0) className += 'log-p1';
+  else if (player === 1) className += 'log-p2';
+  else className += 'log-system';
+  
+  div.className = className;
+  const time = new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  div.innerHTML = `<span class="log-time">${time}</span><span class="log-text">${msg}</span>`;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearLog() { 
+  document.getElementById('log').innerHTML = ''; 
+}
+
+function playerName(p) {
+  return document.getElementById(p === 0 ? 'name-p1' : 'name-p2').value.trim() || `选手${p+1}`;
+}
+
+function showToast(message, duration = 3000) {
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.9);
+    color: #fff;
+    padding: 16px 24px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    z-index: 1000;
+    text-align: center;
+    max-width: 80%;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    animation: popIn 0.3s ease;
+  `;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+let lastTouchEnd = 0;
+document.addEventListener('touchend', function (event) {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 300) {
+    event.preventDefault();
+  }
+  lastTouchEnd = now;
+}, false);
+</script>
+</body>
+</html>
